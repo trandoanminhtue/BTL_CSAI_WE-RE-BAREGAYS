@@ -1,8 +1,8 @@
 # ai.py
 import random
 from constant import PIECE_VALUE, PST_OPENING, PST_ENDGAME, ENDGAME_THRESHOLD
-from engine import all_legal_moves, apply_move, is_white, is_black, find_king, is_attacked
-from opening_book  import get_opening_move
+from engine import all_legal_moves, apply_move, is_white, is_black, find_king, is_attacked, legal_moves
+from opening_book import get_opening_move
 
 # ─── BẢNG CHUYỂN VỊ (TRANSPOSITION TABLE) ───────────────────────────────────
 # Lưu các vị trí đã tính toán để tránh tính lại
@@ -184,8 +184,7 @@ def clear_tt():
 
 
 # ─── HÀM GỌI CHÍNH — TÍCH HỢP OPENING BOOK ──────────────────────────────────
-def get_best_move(board, depth, t, en_passant, castling, move_history,
-                  threshold=40):
+def get_best_move(board, depth, t, en_passant, castling, move_history):
     """
     Hàm duy nhất main.py cần gọi. Ưu tiên theo thứ tự:
       1. Opening book (nếu còn trong sách khai cuộc)
@@ -193,36 +192,17 @@ def get_best_move(board, depth, t, en_passant, castling, move_history,
 
     threshold: nước đi kém hơn tốt nhất dưới X điểm vẫn được xem là tương đương.
     """
-    from opening_book import get_opening_move
-
     # ── Bước 1: Tra opening book ──
     book_move = get_opening_move(move_history)
     if book_move:
         fr, fc, tr, tc = book_move
         # Kiểm tra nước sách có hợp lệ không (đề phòng)
-        from engine import legal_moves
         valid = legal_moves(board, fr, fc, t, en_passant, castling)
         match = next((m for m in valid if m[0] == tr and m[1] == tc), None)
         if match:
             return (fr, fc, tr, tc, match[2])   # Có trong sách → dùng ngay
 
-    # ── Bước 2: Minimax với threshold random ──
-    moves = all_legal_moves(board, t, en_passant, castling)
-    if not moves:
-        return None
-
-    is_max = (t == 'w')
-    scored = []
-    for fr, fc, tr, tc, flag in moves:
-        nb = apply_move(board, fr, fc, tr, tc, flag, t)
-        opp = 'b' if t == 'w' else 'w'
-        new_ep = (fr+(tr-fr)//2, fc) if board[fr][fc] and board[fr][fc].upper()=='P' and abs(tr-fr)==2 else None
-        score, _ = minimax(nb, depth-1, float('-inf'), float('inf'), not is_max, opp, new_ep, castling)
-        scored.append((score, (fr, fc, tr, tc, flag)))
-
-    best_score = max(s for s, _ in scored) if is_max else min(s for s, _ in scored)
-    candidates = [
-        move for score, move in scored
-        if abs(score - best_score) <= threshold
-    ]
-    return random.choice(candidates)
+    # ── Bước 2: Minimax bình thường ──
+    _, best = minimax(board, depth, float('-inf'), float('inf'),
+                      t == 'w', t, en_passant, castling)
+    return best

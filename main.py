@@ -1,6 +1,3 @@
-# main.py — Giao diện desktop bằng Tkinter (built-in Python)
-# Chạy: python main.py  →  Cửa sổ bàn cờ mở ra ngay
-
 import tkinter as tk
 from tkinter import font as tkfont
 import threading
