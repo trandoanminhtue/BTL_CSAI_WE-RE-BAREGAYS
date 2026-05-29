@@ -7,7 +7,7 @@ import threading
 import time
 
 from engine import GameState, all_legal_moves, apply_move, find_king, legal_moves, is_attacked
-from ai import minimax
+from ai import get_best_move, clear_tt
 from constant import FILES
 
 # ── CÀI ĐẶT GIAO DIỆN ────────────────────────────────────────────────────────
@@ -54,8 +54,9 @@ class ChessApp:
         self.selected   = None   # (r, c) ô đang chọn
         self.legal_sqrs = []     # [(r, c)] nước đi hợp lệ
         self.last_move  = None   # ((fr,fc),(tr,tc))
-        self.ai_thinking = False
-        self.move_number = 0
+        self.ai_thinking  = False
+        self.move_number  = 0
+        self.move_history = []   # Lưu (fr,fc,tr,tc) để tra opening book
 
         self._build_ui()
         self.draw_board()
@@ -278,6 +279,7 @@ class ChessApp:
         self.selected   = None
         self.legal_sqrs = []
         self.move_number += 1
+        self.move_history.append((fr, fc, tr, tc))
         self._log_move(fr, fc, tr, tc, 'w')
         self.draw_board()
 
@@ -290,8 +292,9 @@ class ChessApp:
 
     def _ai_move(self):
         t0 = time.time()
-        _, best = minimax(self.gs.board, AI_DEPTH, float('-inf'), float('inf'),
-                          False, 'b', self.gs.en_passant, self.gs.castling)
+        best = get_best_move(self.gs.board, AI_DEPTH, 'b',
+                             self.gs.en_passant, self.gs.castling,
+                             self.move_history)
         elapsed = time.time() - t0
 
         if best:
@@ -302,6 +305,7 @@ class ChessApp:
             self.gs.turn   = 'w'
             self.last_move = ((fr, fc), (tr, tc))
             self.move_number += 1
+            self.move_history.append((fr, fc, tr, tc))
             # Cập nhật UI từ main thread
             self.root.after(0, lambda: self._after_ai(fr, fc, tr, tc, elapsed))
 
@@ -389,12 +393,14 @@ class ChessApp:
         self.status_var.set(msg)
 
     def restart_game(self):
-        self.gs          = GameState()
-        self.selected    = None
-        self.legal_sqrs  = []
-        self.last_move   = None
-        self.ai_thinking = False
-        self.move_number = 0
+        self.gs           = GameState()
+        self.selected     = None
+        self.legal_sqrs   = []
+        self.last_move    = None
+        self.ai_thinking  = False
+        self.move_number  = 0
+        self.move_history = []
+        clear_tt()   # Xóa transposition table của ván cũ
         self.log_text.configure(state="normal")
         self.log_text.delete("1.0", "end")
         self.log_text.configure(state="disabled")
