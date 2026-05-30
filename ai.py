@@ -1,8 +1,14 @@
 # ai.py
 import random
-from constant import PIECE_VALUE, PST_OPENING, PST_ENDGAME, ENDGAME_THRESHOLD
-from engine import all_legal_moves, apply_move, is_white, is_black, find_king, is_attacked, legal_moves
+from constant import PIECE_VALUE
+from engine import all_legal_moves, apply_move, is_white, find_king, is_attacked, legal_moves
 from opening_book import get_opening_move
+
+# ─── HÀM ĐÁNH GIÁ ────────────────────────────────────────────────────────────
+# Chuyển giữa 2 chế độ bằng cách đổi dòng import bên dưới:
+#   Neural net (cần chess_model.pt): from ai_neural import evaluate
+#   PST thủ công (fallback):         from ai_pst    import evaluate
+from ai_neural import evaluate   # ← ĐỔI DÒNG NÀY ĐỂ CHUYỂN CHẾ ĐỘ
 
 # ─── BẢNG CHUYỂN VỊ (TRANSPOSITION TABLE) ───────────────────────────────────
 # Lưu các vị trí đã tính toán để tránh tính lại
@@ -14,71 +20,6 @@ TT_MAX_SIZE = 500_000   # Giới hạn bộ nhớ (~50MB)
 def _hash_board(board):
     """Hash nhanh bàn cờ thành một chuỗi bất biến để làm key."""
     return tuple(p for row in board for p in row)
-
-
-# ─── GIAI ĐOẠN CỜ ────────────────────────────────────────────────────────────
-def get_phase(board):
-    """
-    Xác định giai đoạn ván cờ dựa trên tổng vật chất còn lại.
-    Trả về số thực trong [0.0, 1.0]:
-      1.0 = khai cuộc hoàn toàn
-      0.0 = cờ tàn hoàn toàn
-    Dùng để nội suy mượt giữa PST_OPENING và PST_ENDGAME.
-    """
-    total = 0
-    for row in board:
-        for p in row:
-            if p and p.upper() not in ('K', 'P'):
-                total += PIECE_VALUE[p.upper()]
-    # Tổng vật chất đầu ván (không kể Vua, Tốt) ~ 7800
-    OPENING_MATERIAL = 7800
-    phase = total / OPENING_MATERIAL
-    return max(0.0, min(1.0, phase))   # Kẹp trong [0, 1]
-
-
-def get_pst(pt, phase):
-    """
-    Nội suy giữa PST khai cuộc và PST tàn cuộc theo phase.
-    phase=1.0 → PST_OPENING hoàn toàn
-    phase=0.0 → PST_ENDGAME hoàn toàn
-    """
-    opening_table = PST_OPENING.get(pt)
-    endgame_table = PST_ENDGAME.get(pt)
-    if not opening_table:
-        return None
-    if not endgame_table:
-        return opening_table
-    # Nội suy tuyến tính từng ô
-    return [
-        int(o * phase + e * (1 - phase))
-        for o, e in zip(opening_table, endgame_table)
-    ]
-
-
-# ─── HÀM ĐÁNH GIÁ (DYNAMIC PST) ─────────────────────────────────────────────
-def evaluate(board):
-    """
-    Tính điểm bàn cờ với PST động:
-    - Giai đoạn khai cuộc: dùng PST_OPENING (Vua trốn góc, kiểm soát trung tâm)
-    - Giai đoạn tàn cuộc: dùng PST_ENDGAME (Vua ra trung tâm, Tốt tiến lên)
-    - Trung cuộc: nội suy mượt giữa hai bảng
-    """
-    phase = get_phase(board)
-    score = 0
-    for r in range(8):
-        for c in range(8):
-            p = board[r][c]
-            if not p:
-                continue
-            pt = p.upper()
-            white = is_white(p)
-            idx = r * 8 + c if white else (7 - r) * 8 + c
-            val = PIECE_VALUE[pt]
-            pst = get_pst(pt, phase)
-            if pst:
-                val += pst[idx]
-            score += val if white else -val
-    return score
 
 
 # ─── SẮP XẾP NƯỚC ĐI (MOVE ORDERING) ────────────────────────────────────────
