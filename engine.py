@@ -27,7 +27,7 @@ def is_black(p): return p and p.islower()
 def is_own(p, t): return is_white(p) if t == 'w' else is_black(p)
 # nếu t là 'w' (Trắng), hàm sẽ trả về True nếu p là ký tự hoa (quân Trắng), 
 # ngược lại nếu t là 'b' (Đen), hàm sẽ trả về True nếu p là ký tự thường (quân Đen).
-def is_opp(p, t): return is_black(p) if t == 'b' else is_white(p)
+def is_opp(p, t): return is_white(p) if t == 'b' else is_black(p)
 # ngược lại
 #logic của hàm: nếu đến lượt đi của Trắng (t == 'w'), 
 # hàm sẽ trả về is_white, 
