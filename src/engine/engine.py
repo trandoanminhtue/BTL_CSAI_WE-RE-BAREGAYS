@@ -1,5 +1,5 @@
 # engine.py
-import constant
+import src.engine.constant as constant
 
 class GameState:
     def __init__(self):

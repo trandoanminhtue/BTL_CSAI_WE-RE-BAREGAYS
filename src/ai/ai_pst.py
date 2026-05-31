@@ -2,8 +2,8 @@
 # Hàm evaluate() dựa trên PST thủ công — fallback khi chưa có chess_model.pt
 # Dùng bằng cách sửa ai.py: from ai_pst import evaluate
 
-from constant import PIECE_VALUE, PST_OPENING, PST_ENDGAME
-from engine import is_white
+from src.engine.constant import PIECE_VALUE, PST_OPENING, PST_ENDGAME
+from src.engine.rules import is_white
 
 
 def get_phase(board):
