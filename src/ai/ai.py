@@ -1,14 +1,14 @@
 # ai.py
 import random
-from constant import PIECE_VALUE
-from engine import all_legal_moves, apply_move, is_white, find_king, is_attacked, legal_moves
-from opening_book import get_opening_move
+from src.engine.constant import PIECE_VALUE
+from src.engine.rules import all_legal_moves, apply_move, is_white, find_king, is_attacked, legal_moves
+from src.utils.opening_book import get_opening_move
 
 # ─── HÀM ĐÁNH GIÁ ────────────────────────────────────────────────────────────
 # Chuyển giữa 2 chế độ bằng cách đổi dòng import bên dưới:
 #   Neural net (cần chess_model.pt): from ai_neural import evaluate
 #   PST thủ công (fallback):         from ai_pst    import evaluate
-from ai_neural import evaluate   # ← ĐỔI DÒNG NÀY ĐỂ CHUYỂN CHẾ ĐỘ
+from src.ai.ai_neural import evaluate   # ← ĐỔI DÒNG NÀY ĐỂ CHUYỂN CHẾ ĐỘ
 
 # ─── BẢNG CHUYỂN VỊ (TRANSPOSITION TABLE) ───────────────────────────────────
 # Lưu các vị trí đã tính toán để tránh tính lại

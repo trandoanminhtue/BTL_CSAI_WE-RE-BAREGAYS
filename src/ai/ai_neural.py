@@ -52,7 +52,7 @@ def _load_model():
     if not TORCH_AVAILABLE:
         raise ImportError("PyTorch chưa được cài. Chạy: pip install torch")
 
-    model_path = os.path.join(os.path.dirname(__file__), 'chess_model.pt')
+    model_path = os.path.join(os.path.dirname(__file__),'..', '..', 'models', 'chess_model.pt')
     if not os.path.exists(model_path):
         raise FileNotFoundError(
             f"Không tìm thấy chess_model.pt tại {model_path}\n"
