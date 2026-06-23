@@ -1,14 +1,18 @@
 # ai.py
-import random
+import time
 from src.engine.constant import PIECE_VALUE
 from src.engine.rules import all_legal_moves, apply_move, is_white, find_king, is_attacked, legal_moves
 from src.utils.opening_book import get_opening_move
 
+class SearchTimeout(Exception):
+    """Raised when AI search exceeds its time budget."""
+    pass
+
 # ─── HÀM ĐÁNH GIÁ ────────────────────────────────────────────────────────────
-# Chuyển giữa 2 chế độ bằng cách đổi dòng import bên dưới:
-#   Neural net (cần chess_model.pt): from ai_neural import evaluate
-#   PST thủ công (fallback):         from ai_pst    import evaluate
-from src.ai.ai_neural import evaluate   # ← ĐỔI DÒNG NÀY ĐỂ CHUYỂN CHẾ ĐỘ
+# Hybrid (mặc định): neural + PST + heuristic, tự fallback nếu thiếu model
+# Chỉ PST:           from src.ai.ai_pst import evaluate
+# Chỉ neural:        from src.ai.ai_neural import evaluate
+from src.ai.ai_hybrid import evaluate
 
 # ─── BẢNG CHUYỂN VỊ (TRANSPOSITION TABLE) ───────────────────────────────────
 # Lưu các vị trí đã tính toán để tránh tính lại
@@ -17,9 +21,21 @@ from src.ai.ai_neural import evaluate   # ← ĐỔI DÒNG NÀY ĐỂ CHUYỂN C
 _tt = {}
 TT_MAX_SIZE = 500_000   # Giới hạn bộ nhớ (~50MB)
 
+_eval_cache = {}
+EVAL_CACHE_MAX = 200_000
+
 def _hash_board(board):
     """Hash nhanh bàn cờ thành một chuỗi bất biến để làm key."""
     return tuple(p for row in board for p in row)
+
+def _cached_evaluate(board):
+    """Cache kết quả evaluate — tránh gọi CNN/PST lặp lại cùng một thế cờ."""
+    key = _hash_board(board)
+    if key not in _eval_cache:
+        if len(_eval_cache) >= EVAL_CACHE_MAX:
+            _eval_cache.clear()
+        _eval_cache[key] = evaluate(board)
+    return _eval_cache[key]
 
 
 # ─── SẮP XẾP NƯỚC ĐI (MOVE ORDERING) ────────────────────────────────────────
@@ -47,11 +63,14 @@ def order_moves(board, moves):
 
 
 # ─── MINIMAX + ALPHA-BETA + TRANSPOSITION TABLE ───────────────────────────────
-def minimax(board, depth, alpha, beta, is_max, t, en_passant, castling):
+def minimax(board, depth, alpha, beta, is_max, t, en_passant, castling, deadline=None):
     """
     Minimax với Alpha-Beta và Transposition Table.
     Nếu vị trí đã tính ở độ sâu >= depth hiện tại → dùng lại kết quả.
     """
+    if deadline and time.time() >= deadline:
+        raise SearchTimeout()
+
     board_key = (_hash_board(board), depth, is_max)
 
     # ── Tra bảng chuyển vị ──
@@ -67,7 +86,7 @@ def minimax(board, depth, alpha, beta, is_max, t, en_passant, castling):
             return tt_score, tt_move
 
     if depth == 0:
-        return evaluate(board), None
+        return _cached_evaluate(board), None
 
     moves = all_legal_moves(board, t, en_passant, castling)
 
@@ -87,7 +106,7 @@ def minimax(board, depth, alpha, beta, is_max, t, en_passant, castling):
         for fr, fc, tr, tc, flag in moves:
             nb = apply_move(board, fr, fc, tr, tc, flag, t)
             new_ep = (fr+(tr-fr)//2, fc) if board[fr][fc] and board[fr][fc].upper()=='P' and abs(tr-fr)==2 else None
-            score, _ = minimax(nb, depth-1, alpha, beta, False, opp, new_ep, castling)
+            score, _ = minimax(nb, depth-1, alpha, beta, False, opp, new_ep, castling, deadline)
             if score > best:
                 best = score
                 best_move = (fr, fc, tr, tc, flag)
@@ -99,7 +118,7 @@ def minimax(board, depth, alpha, beta, is_max, t, en_passant, castling):
         for fr, fc, tr, tc, flag in moves:
             nb = apply_move(board, fr, fc, tr, tc, flag, t)
             new_ep = (fr+(tr-fr)//2, fc) if board[fr][fc] and board[fr][fc].upper()=='P' and abs(tr-fr)==2 else None
-            score, _ = minimax(nb, depth-1, alpha, beta, True, opp, new_ep, castling)
+            score, _ = minimax(nb, depth-1, alpha, beta, True, opp, new_ep, castling, deadline)
             if score < best:
                 best = score
                 best_move = (fr, fc, tr, tc, flag)
@@ -120,18 +139,17 @@ def minimax(board, depth, alpha, beta, is_max, t, en_passant, castling):
     return best, best_move
 
 def clear_tt():
-    """Xóa bảng chuyển vị khi bắt đầu ván mới."""
+    """Xóa bảng chuyển vị và cache đánh giá khi bắt đầu ván mới."""
     _tt.clear()
+    _eval_cache.clear()
 
 
 # ─── HÀM GỌI CHÍNH — TÍCH HỢP OPENING BOOK ──────────────────────────────────
-def get_best_move(board, depth, t, en_passant, castling, move_history):
+def get_best_move(board, depth, t, en_passant, castling, move_history, time_limit=None):
     """
     Hàm duy nhất main.py cần gọi. Ưu tiên theo thứ tự:
       1. Opening book (nếu còn trong sách khai cuộc)
-      2. Minimax với threshold random (chọn ngẫu nhiên trong top nước tương đương)
-
-    threshold: nước đi kém hơn tốt nhất dưới X điểm vẫn được xem là tương đương.
+      2. Iterative deepening Minimax (dừng khi hết time_limit nếu có)
     """
     # ── Bước 1: Tra opening book ──
     book_move = get_opening_move(move_history)
@@ -143,7 +161,17 @@ def get_best_move(board, depth, t, en_passant, castling, move_history):
         if match:
             return (fr, fc, tr, tc, match[2])   # Có trong sách → dùng ngay
 
-    # ── Bước 2: Minimax bình thường ──
-    _, best = minimax(board, depth, float('-inf'), float('inf'),
-                      t == 'w', t, en_passant, castling)
+    # ── Bước 2: Iterative deepening — dùng kết quả depth trước nếu hết giờ ──
+    deadline = time.time() + time_limit if time_limit else None
+    best = None
+    for d in range(1, depth + 1):
+        if deadline and time.time() >= deadline:
+            break
+        try:
+            _, move = minimax(board, d, float('-inf'), float('inf'),
+                              t == 'w', t, en_passant, castling, deadline)
+            if move:
+                best = move
+        except SearchTimeout:
+            break
     return best

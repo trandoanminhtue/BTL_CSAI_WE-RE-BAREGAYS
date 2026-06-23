@@ -7,7 +7,8 @@ from src.engine.game_state import GameState
 from src.engine.rules import all_legal_moves, apply_move, legal_moves, find_king, is_attacked
 from src.ai.ai import get_best_move, clear_tt
 
-AI_DEPTH = 3
+AI_DEPTH = 3          # độ sâu tối đa (iterative deepening)
+AI_TIME_LIMIT = 2.0   # giây — AI dừng suy nghĩ sau thời gian này
 
 
 class GameController:
@@ -66,7 +67,7 @@ class GameController:
         t0   = time.time()
         best = get_best_move(self.gs.board, AI_DEPTH, 'b',
                              self.gs.en_passant, self.gs.castling,
-                             self.gs.move_history)
+                             self.gs.move_history, time_limit=AI_TIME_LIMIT)
         elapsed = time.time() - t0
 
         if not best:
