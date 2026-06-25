@@ -1,4 +1,4 @@
-# ai_eval.py — Hàm đánh giá nâng cao: PST + heuristic chiến thuật
+# ai_eval.py — Hàm đánh giá nâng cao: PST + heuristic chiến thuật.
 
 from src.engine.constant import PIECE_VALUE, PST_OPENING, PST_ENDGAME
 from src.engine.rules import is_white, is_black, is_attacked, find_king
